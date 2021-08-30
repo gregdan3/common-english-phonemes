@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from collections import Counter
+
 from lxml.html import fromstring
 from requests import get
 
@@ -29,6 +31,21 @@ XPATH = '//a[@class="Parameter"]'
 # main table is populated by js, chart on 2nd page is not!
 
 
+def voting_intersect(*sets: set, portion: float = 1.0):
+    """set intersection but the ratio of set membership matters"""
+    assert 0 <= portion <= 1
+    min_to_elect = portion * len(sets)
+
+    elected = set()
+    counter = Counter()
+    for s in sets:
+        counter.update(s)
+    for key, value in counter.items():
+        if value >= min_to_elect:
+            elected.add(key)
+    return elected
+
+
 def main():
     phonemes = []
     for page in INVENTORIES:
@@ -39,7 +56,7 @@ def main():
         cleaned = {elem.text.strip() for elem in xpathfinds}
         # strip is insurance, not actually needed
         phonemes.append(cleaned)
-    final = set.intersection(*phonemes)
+    final = voting_intersect(*phonemes, portion=0.7)
     for element in sorted(final):
         print(element)
 
