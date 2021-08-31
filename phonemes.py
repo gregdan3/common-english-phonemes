@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+import asyncio
 from collections import Counter
 
+import aiohttp
 from lxml.html import fromstring
-from requests import get
 
 
 def sxpath(html, xpath):
@@ -13,7 +14,7 @@ def sxpath(html, xpath):
 # every phoneme inventory that comes up for searching "English"
 # excludes non-English entries such as
 # "Liberian English", a pidgin relative of english
-INVENTORIES = [
+INVENTORIES = [  # TODO: derive automatically from search?
     "https://phoible.org/inventories/view/160",
     "https://phoible.org/inventories/view/2175",
     "https://phoible.org/inventories/view/2176",
@@ -46,19 +47,38 @@ def voting_intersect(*sets: set, portion: float = 1.0):
     return elected
 
 
-def main():
+def get_phonemes_from_page(page: str):
+    searchable = fromstring(page)
+    found = sxpath(searchable, XPATH)
+    assert len(found)
+    cleaned = {elem.text.strip() for elem in found}
+    # strip is insurance, not actually needed
+    return cleaned
+
+
+async def get(session, url: str):
+    resp = await session.get(url)
+    text = await resp.text()
+    return text
+
+
+async def run():
+    sess = aiohttp.ClientSession()
+
     phonemes = []
-    for page in INVENTORIES:
-        resp = get(page)
-        resptext = resp.text
-        resphtml = fromstring(resptext)
-        xpathfinds = sxpath(resphtml, XPATH)
-        cleaned = {elem.text.strip() for elem in xpathfinds}
-        # strip is insurance, not actually needed
+    resps = await asyncio.gather(*[get(sess, page) for page in INVENTORIES])
+    await sess.close()
+    for resp in resps:
+        cleaned = get_phonemes_from_page(resp)
         phonemes.append(cleaned)
     final = voting_intersect(*phonemes, portion=0.7)
     for element in sorted(final):
-        print(element)
+        print(element)  # TODO: nicer looking?
+
+
+def main():
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run())
 
 
 if __name__ == "__main__":
